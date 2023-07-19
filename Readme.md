@@ -23,6 +23,17 @@ This setup is similar to how many organisations manage their Azure applications.
 
 This repository doesn not cover CI/CD pipelines, though all the Bicep and C# code here can be deployed with a pipeline. The scripts are used to simulate pipelines that deploy the resources and application.
 
+## The application
+
+The demo application is a minimal API app with a single endpoint that returns a bit of raw HTML. The text is styled with a color and contains a secret value. 
+The color and secret value are retrieved from Azure App Configuration. The secret is a reference to an Azure Key Vault secret. 
+
+The application also has a feature flag that can be used to enable/disable a feature at runtime. This is visible in the HTML output as a bit of text that says `Beta`. The feature flag is also retrieved from Azure App Configuration.
+
+![Azure resources](./Docs/Resources.png)
+
+> ℹ️ The *acme* prefix shown in this image is used to make the resource names unique, you can specify a different prefix when deploying the resources.
+
 ## What you'll learn
 
 This repo is a demo application that shows how to apply Infrastructure as Code (IaC) with Bicep and zero-knowledge security in Azure applications ánd local development. It is based on actual production code and is used to demonstrate the following topics:
