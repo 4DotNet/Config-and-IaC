@@ -1,14 +1,4 @@
-# Deploy resources to your subscription
-
-$location='westeurope'
-$mode='Incremental'
-$name='CmdLineDeploy'
-$templateFile="./Resources/shared-infra.bicep"
-$parameters = [PSCustomObject]@{
-    prefix = "acme1"
-    environment = "development"
-    initialdeployment = $false
-}
+$prefix=$Env:DeployPrefix
 
 $account=$(az account show --output json)| ConvertFrom-Json
 if($LASTEXITCODE -ne 0){
@@ -65,42 +55,20 @@ if($subscriptions.Count -gt 1){
     Write-Host ""
 }
 
-Write-Host -ForegroundColor Yellow "Please enter a resource prefix. This should be a short text starting with a letter (default $($parameters.prefix)): "
+Write-Host -ForegroundColor Yellow "Please enter a resource prefix. This should be a short text starting with a letter (default $prefix): "
 $prefix = Read-Host;
 
 if( $prefix -ne '')
 {
-    $parameters.prefix=$prefix;
+    $prefix=$prefix;
 }
+$Env:DeployPrefix=$prefix # Set the environment variable for the next script
 
-$resourceGroup="$($parameters.prefix)-demo-dev"
 
-if($(az group exists --name $resourceGroup) -eq 'false')
-{
-    $parameters.initialdeployment=$true;
-}
+Write-Host -ForegroundColor Yellow "⚠️  Removing resource group $prefix-app-dev and $prefix-infra-dev. Press any key to continue or Ctrl+C to cancel."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
-Write-Host -ForegroundColor Green "Ensuring resource group $resourceGroup exists"
-az group create --name $resourceGroup --location $location
+az group delete --name "$prefix-app-dev" --no-wait --yes
+az group delete --name "$prefix-infra-dev" --no-wait --yes
 
-if ($LastExitCode -ne 0) { Write-Error "Resouce group creation failed"; exit 1; }
-
-$now=Get-Date -format "yyyyMMddHHmm"
-Write-Host -ForegroundColor Green "Deploying $templateFile as $name-$now"
-
-# Prep parameters
-$preppedParams = @{};
-
-$parameters.PSObject.Properties | ForEach-Object {
-    $preppedParams[$_.Name] = @{
-            value = $_.Value
-        }
-    }
-
-$jsonParams = $preppedParams | ConvertTo-Json -Depth 10 -Compress
-$jsonParams = $jsonParams -replace '"', '\"'
-
-Write-Host "Parameters: $jsonParams"
-az deployment group create --mode $mode --resource-group $resourceGroup --template-file $templateFile --parameters "$jsonParams" --name "$name-$now"
-
-if ($LastExitCode -ne 0) { Write-Error "Deployment failed"; exit 1; }
+Write-Host -ForegroundColor Green "Resource removal in progress. This may take a few minutes."

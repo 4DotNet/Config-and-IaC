@@ -24,6 +24,7 @@ param principalType string = 'ServicePrincipal'
   'AppConfigurationDataReader'
   'AcrPull'
   'AcrPush'
+  'KeyVaultSecretUser'
 ])
 @description('Built-in role to assign')
 param builtInRoleType string
@@ -47,6 +48,8 @@ var role = {
   AcrPull: resourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
   // Allows pushing images to an Azure Container Registry.
   AcrPush: resourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
+  // Allows read access to Azure Key Vault secrets.
+  KeyVaultSecretUser: resourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
 }
 
 resource roleAssignStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {

@@ -16,9 +16,10 @@ param prefix string
 
 param location string = resourceGroup().location
 
-param deploymentTimestamp string = utcNow('yyMMddhhmmss')
+@description('The object ID of the administrative user. That would be you 🫵. Run this command to get that id:  az ad signed-in-user show --query id --output tsv')
+param adminObjectId string
 
-param initialDeployment bool = false
+param deploymentTimestamp string = utcNow('yyMMddhhmmss')
 
 // Short names for environments, used in resource names
 var envNames = {
@@ -46,14 +47,15 @@ var settings = {
   }
 }
 
-module keyVault './Modules/keyvault.bicep' ={
+module keyvault './Modules/keyvault.bicep' = {
   name: 'keyvault-${deploymentTimestamp}'
-  params:{
-    location: location
-    deploymentTimestamp: deploymentTimestamp
+  params: {
     name: settings.keyvault.name
+    location: location
     logAnalyticsWorkspace: logging.outputs.logAnalytics
-    deployFromScratch: initialDeployment
+    enableFirewall: false
+    ipRules: [ ]
+    adminObjectIds: [ adminObjectId ]
   }
 }
 
@@ -63,6 +65,7 @@ module appConfigService './Modules/appConfig.bicep' = {
     location: location
     name: settings.appconfig.name
     sku:  settings.appconfig.sku
+    dataOwnersUserIds: [ adminObjectId ]
   }
 }
 

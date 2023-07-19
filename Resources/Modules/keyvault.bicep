@@ -1,31 +1,83 @@
 param name string
 @description('The location of the resources.')
 param location string = resourceGroup().location
+
 @allowed(['standard','premium'])
 param sku string = 'standard'
-param deploymentTimestamp string
-param logAnalyticsWorkspace string
+
+param enableFirewall bool
 @description('A list of IP addresses that should have access to the KeyVault.')
-param allowedIps array = []
-@description('Set to true on first deployment only.')
-param deployFromScratch bool = false
+param ipRules array 
+param developersGroupObjectId string = ''
+param adminObjectIds array = []
+param logAnalyticsWorkspace string
 
-var devopsIps = [       
-    '40.74.28.0/23' // https://learn.microsoft.com/en-us/azure/devops/organizations/security/allow-list-ip-url?view=azure-devops&tabs=IP-V4#inbound-connections
-]
-
-// https://ochzhen.com/blog/key-vault-access-policies-using-azure-bicep#keep-existing-access-policies-when-redeploying-a-key-vault
-// If it's a new key vault, we pass empty array but it could be any static set of access policies
-var accessPolicies = deployFromScratch ? [] : reference(resourceId('Microsoft.KeyVault/vaults', name), '2019-09-01').accessPolicies
-
-module keyvault 'keyvault-with-policies.bicep' = {
-  name: 'keyvault-inner-${deploymentTimestamp}'
-  params: {
-    name: name
-    location: location
-    accessPolicies: accessPolicies
-    logAnalyticsWorkspace: logAnalyticsWorkspace
-    sku: sku
-    ipRules: [ for ip in concat(allowedIps, devopsIps): { value: ip } ]
+resource keyvault 'Microsoft.KeyVault/vaults@2022-07-01' = {
+  name: name
+  location: location
+  properties: {
+    sku: {
+      family: 'A'
+      name: sku
+    }
+    //createMode: 'recover' // Use create exclusively when the KV doesn't exist yet or access policies added outside this template will be removed
+    tenantId: subscription().tenantId
+    enabledForDeployment: true
+    enabledForDiskEncryption: false
+    enabledForTemplateDeployment: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    enableRbacAuthorization: true
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: enableFirewall ? 'Deny' : 'Allow' // Set to Deny to enable firewall
+      ipRules: ipRules
+    }
   }
 }
+
+var keyVaultAdminRole = '8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+
+resource roleAssignOwner 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = [for owner in adminObjectIds : {
+    name: guid(keyvault.id, owner, keyVaultAdminRole)
+    scope: keyvault
+    properties: {
+      roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions',keyVaultAdminRole)
+      principalType: 'User'
+      principalId: owner
+    }
+  }
+]
+
+resource roleAssignStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = if(!empty(developersGroupObjectId)) {
+  name: guid(keyvault.id, developersGroupObjectId, keyVaultAdminRole)
+  scope: keyvault
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions',keyVaultAdminRole)
+    principalType: 'Group'
+    principalId: developersGroupObjectId
+  }
+}
+
+@description('Send audit logs and metrics to LogAnalytics. This provides insights into security and operation health.')
+resource auditLogs 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'default'
+  scope: keyvault
+  properties: {
+    workspaceId: logAnalyticsWorkspace
+    logs: [
+      {
+        category: 'AuditEvent'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+output keyvaultId string = keyvault.id

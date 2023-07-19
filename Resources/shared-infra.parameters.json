@@ -7,9 +7,6 @@
     },
     "prefix": {
       "value": "acme1"
-    },
-    "initialDeployment": {
-      "value": true
     }
   }
 }

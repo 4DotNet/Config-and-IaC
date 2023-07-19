@@ -365,3 +365,4 @@ MigrationBackup/
 FodyWeavers.xsd
 *.ncrunch*
 LoadTester/reports
+output/

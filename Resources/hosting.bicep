@@ -1,12 +1,12 @@
 
-param name string
+param app string
 param prefix string
 param environment string
 param sharedResourceGroup string = 'infra'
 
-param hostingPlanName string
-param managedIdentityName string
 param sku string
+
+param deploymentTimestamp string = utcNow('yyMMddhhmmss')
 
 @description('The resource location. Defaults to the resource group location.')
 param location string = resourceGroup().location
@@ -22,23 +22,28 @@ var envNames = {
 var env = envNames[environment]
 
 var settings = {
+  hostingPlanName: '${prefix}-asp-${env}'
+  managedIdentityName: '${prefix}-id-${env}'
+  appName: '${prefix}-app-${env}-${app}'
   logging: {
     resourceGroup: '${prefix}-${sharedResourceGroup}-${env}'
     appinsights: '${prefix}-appinsights-${env}'
     logAnalytics: '${prefix}-law-${env}'
   }
   keyvault:{
+    resourceGroup: '${prefix}-${sharedResourceGroup}-${env}'
     name: '${prefix}-keyvault-${env}'
     sku: 'standard'
   }
   appconfig: {
+    resourceGroup: '${prefix}-${sharedResourceGroup}-${env}'
     name: '${prefix}-appconfig-${env}'
     sku: 'standard'
   }
 }
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2022-09-01' = {
-  name: hostingPlanName
+  name: settings.hostingPlanName
   location: location
   kind: 'linux'
   tags: {
@@ -52,18 +57,44 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2022-09-01' = {
   }
 }
 
+resource appConfig 'Microsoft.AppConfiguration/configurationStores@2023-03-01' existing = {
+  name: settings.appconfig.name
+  scope: resourceGroup(settings.appconfig.resourceGroup)
+}
+
 resource appInsights 'Microsoft.Insights/components@2020-02-02' existing = {
   name: settings.logging.appinsights
   scope: resourceGroup(settings.logging.resourceGroup)
 }
 
 resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
-  name: managedIdentityName
+  name: settings.managedIdentityName
   location: location
 }
 
+module appConfigReader 'Modules/roleAssignment.bicep' = {
+  name: 'appConfigReader--${deploymentTimestamp}'
+  scope: resourceGroup(settings.appconfig.resourceGroup)
+  params: {
+    
+    builtInRoleType: 'AppConfigurationDataReader'
+    principalId: managedIdentity.properties.principalId
+  }
+}
+
+
+module keyVaultReader 'Modules/roleAssignment.bicep' = {
+  name: 'keyVaultReader--${deploymentTimestamp}'
+  scope: resourceGroup(settings.keyvault.resourceGroup)
+  params: {
+    
+    builtInRoleType: 'KeyVaultSecretUser'
+    principalId: managedIdentity.properties.principalId
+  }
+}
+
 resource name_resource 'Microsoft.Web/sites@2022-03-01' = {
-  name: name
+  name: settings.appName
   location: location
   identity: {
     type: 'UserAssigned'
@@ -82,7 +113,10 @@ resource name_resource 'Microsoft.Web/sites@2022-03-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsights.properties.ConnectionString
         }
-        // TODO : appconfig url
+        {
+          name: 'AppConfig__Uri'
+          value: appConfig.properties.endpoint
+        }
         {
           name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
           value: '~3'
@@ -90,6 +124,10 @@ resource name_resource 'Microsoft.Web/sites@2022-03-01' = {
         {
           name: 'XDT_MicrosoftApplicationInsights_Mode'
           value: 'Recommended'
+        }
+        {
+          name: 'MANAGED_CLIENT_ID'
+          value: managedIdentity.properties.clientId
         }
       ]
       linuxFxVersion: 'DOTNETCORE|7.0'
