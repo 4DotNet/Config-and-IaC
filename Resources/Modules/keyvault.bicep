@@ -36,7 +36,7 @@ resource keyvault 'Microsoft.KeyVault/vaults@2022-07-01' = {
   }
 }
 
-var keyVaultAdminRole = '8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+var keyVaultAdminRole = '00482a5a-887f-4fb3-b363-3b7fe8e74483'
 
 resource roleAssignOwner 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = [for owner in adminObjectIds : {
     name: guid(keyvault.id, owner, keyVaultAdminRole)
